@@ -1,4 +1,4 @@
-package com.example.wukong
+package com.tianqi.camera
 
 import org.junit.Test
 
