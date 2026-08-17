@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.TianqiCamera" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- App 主题（奶白底，无 ActionBar） -->
+    <style name="Theme.App" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/milk_white</item>
+    </style>
+
+    <!-- 启动屏：甜粉底 + 白色相机图标，结束后切回 App 主题 -->
+    <style name="Theme.TianqiCamera" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FF9FB2</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="postSplashScreenTheme">@style/Theme.App</item>
+    </style>
 </resources>

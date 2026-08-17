@@ -1,27 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 占位图标：甜粉底色 + 白色相机图形（见 04-素材与设计规范.md），正式图标到位后替换 -->
+<!-- 启动屏图标：与桌面图标同款白色相机图形 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 相机顶部凸起 -->
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M46,44 L49,37 L59,37 L62,44 Z" />
-    <!-- 相机机身（圆角矩形） -->
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M36,44 L72,44 Q79,44 79,51 L79,69 Q79,76 72,76 L36,76 Q29,76 29,69 L29,51 Q29,44 36,44 Z" />
-    <!-- 镜头（甜粉圆形镂空效果） -->
     <path
         android:fillColor="#FF9FB2"
         android:pathData="M54,60 m-10,0 a10,10 0 1,1 20,0 a10,10 0 1,1 -20,0 Z" />
-    <!-- 镜头高光 -->
     <path
         android:fillColor="#FFC9A3"
         android:pathData="M54,60 m-4,0 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0 Z" />
-    <!-- 闪光灯小点 -->
     <path
         android:fillColor="#FFC9A3"
         android:pathData="M70,51 m-2.5,0 a2.5,2.5 0 1,1 5,0 a2.5,2.5 0 1,1 -5,0 Z" />

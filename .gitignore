@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# 签名材料与密码绝不入库
+key.properties
+*.jks
+*.keystore

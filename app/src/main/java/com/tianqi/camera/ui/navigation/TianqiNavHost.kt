@@ -15,6 +15,7 @@ import com.tianqi.camera.ui.pages.collage.CollageEditorPage
 import com.tianqi.camera.ui.pages.export.ExportPage
 import com.tianqi.camera.ui.pages.home.HomePage
 import com.tianqi.camera.ui.pages.photo.PhotoEditorPage
+import com.tianqi.camera.ui.pages.settings.SettingsPage
 import com.tianqi.camera.ui.pages.template.TemplatePickerPage
 
 /** 页面路由，对应 PRD 第 4 节页面结构 */
@@ -25,6 +26,7 @@ object Routes {
     const val COLLAGE_EDITOR = "collage_editor"
     const val PHOTO_EDITOR = "photo_editor"
     const val EXPORT = "export"
+    const val SETTINGS = "settings"
 }
 
 @Composable
@@ -60,7 +62,8 @@ fun TianqiNavHost() {
                     } else {
                         DraftStore.clear(context)
                     }
-                }
+                },
+                onSettingsClick = { navController.navigate(Routes.SETTINGS) }
             )
         }
         composable(Routes.CAMERA) {
@@ -105,5 +108,6 @@ fun TianqiNavHost() {
             )
         }
         composable(Routes.EXPORT) { ExportPage(onBack = { navController.popBackStack() }) }
+        composable(Routes.SETTINGS) { SettingsPage(onBack = { navController.popBackStack() }) }
     }
 }

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.GridOn
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -69,9 +70,17 @@ fun HomePage(
     onCameraClick: () -> Unit,
     onPhotosPicked: (List<android.net.Uri>) -> Unit,
     onWorkClick: (java.io.File) -> Unit,
-    onRestoreDraft: () -> Unit
+    onRestoreDraft: () -> Unit,
+    onSettingsClick: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    // 首次启动：隐私政策弹窗，同意后不再弹出
+    val prefs = remember { context.getSharedPreferences("tianqi", android.content.Context.MODE_PRIVATE) }
+    var showPrivacy by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        showPrivacy = !prefs.getBoolean("privacy_agreed", false)
+    }
 
     // 系统相册多选（Photo Picker 无需权限，HEIC 由系统解码）
     val pickPhotos = rememberLauncherForActivityResult(
@@ -116,11 +125,21 @@ fun HomePage(
                 .padding(horizontal = 20.dp)
         ) {
             Spacer(Modifier.height(24.dp))
-            Text(
-                text = "甜气相机",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "甜气相机",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f)
+                )
+                androidx.compose.material3.IconButton(onClick = onSettingsClick) {
+                    Icon(
+                        Icons.Outlined.Settings,
+                        contentDescription = "设置",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             Spacer(Modifier.height(4.dp))
             Text(
                 text = "随手拍，甜甜拼",
@@ -160,6 +179,19 @@ fun HomePage(
             Spacer(Modifier.height(12.dp))
             WorksRow(works = works, onWorkClick = onWorkClick)
         }
+    }
+
+    if (showPrivacy) {
+        com.tianqi.camera.ui.components.PrivacyPolicyDialog(
+            onAgree = {
+                prefs.edit().putBoolean("privacy_agreed", true).apply()
+                showPrivacy = false
+            },
+            onDecline = {
+                // 不同意则退出 App
+                (context as? android.app.Activity)?.finish()
+            }
+        )
     }
 
     if (showDraftDialog) {
@@ -291,6 +323,6 @@ private fun WorksRow(works: List<java.io.File>, onWorkClick: (java.io.File) -> U
 @Composable
 private fun HomePagePreview() {
     TianqiCameraTheme {
-        HomePage(onCameraClick = {}, onPhotosPicked = {}, onWorkClick = {}, onRestoreDraft = {})
+        HomePage(onCameraClick = {}, onPhotosPicked = {}, onWorkClick = {}, onRestoreDraft = {}, onSettingsClick = {})
     }
 }
