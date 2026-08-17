@@ -1,6 +1,7 @@
 package com.tianqi.camera.service
 
 import android.net.Uri
+import com.tianqi.camera.model.CollageEditState
 
 /** 一张图片的滤镜状态：滤镜 id + 强度 0-100（PRD 3.2：每张图独立设置） */
 data class FilterState(
@@ -18,6 +19,12 @@ object EditSession {
 
     /** 相册多选的照片（进模板选择页），1-9 张 */
     var pickedPhotos: List<Uri> = emptyList()
+
+    /** 当前拼图编辑状态（进拼图编辑页） */
+    var collageState: CollageEditState? = null
+
+    /** 当前选中的拼图模板 */
+    var collageTemplate: com.tianqi.camera.model.CollageTemplate? = null
 
     /** 每张图片的滤镜状态，key = uri.toString() */
     val filterStates = mutableMapOf<String, FilterState>()

@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.tianqi.camera.model.CollageEditState
+import com.tianqi.camera.model.SlotEditState
 import com.tianqi.camera.service.EditSession
 import com.tianqi.camera.ui.pages.camera.CameraPage
 import com.tianqi.camera.ui.pages.collage.CollageEditorPage
@@ -44,8 +46,28 @@ fun TianqiNavHost() {
                 }
             )
         }
-        composable(Routes.TEMPLATE_PICKER) { TemplatePickerPage(onBack = { navController.popBackStack() }) }
-        composable(Routes.COLLAGE_EDITOR) { CollageEditorPage(onBack = { navController.popBackStack() }) }
+        composable(Routes.TEMPLATE_PICKER) {
+            TemplatePickerPage(
+                onBack = { navController.popBackStack() },
+                onTemplateSelected = { template ->
+                    EditSession.collageTemplate = template
+                    EditSession.collageState = CollageEditState(
+                        templateId = template.id,
+                        canvasRatio = template.defaultRatio,
+                        slots = template.slots.mapIndexed { index, _ ->
+                            SlotEditState(uri = EditSession.pickedPhotos.getOrNull(index))
+                        }
+                    )
+                    navController.navigate(Routes.COLLAGE_EDITOR)
+                }
+            )
+        }
+        composable(Routes.COLLAGE_EDITOR) {
+            CollageEditorPage(
+                onBack = { navController.popBackStack() },
+                onExport = { navController.navigate(Routes.EXPORT) }
+            )
+        }
         composable(Routes.PHOTO_EDITOR) { PhotoEditorPage(onBack = { navController.popBackStack() }) }
         composable(Routes.EXPORT) { ExportPage(onBack = { navController.popBackStack() }) }
     }
