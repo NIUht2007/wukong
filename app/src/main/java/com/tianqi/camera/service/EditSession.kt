@@ -1,6 +1,7 @@
 package com.tianqi.camera.service
 
 import android.net.Uri
+import androidx.compose.runtime.mutableIntStateOf
 import com.tianqi.camera.model.CollageEditState
 
 /** 一张图片的滤镜状态：滤镜 id + 强度 0-100（PRD 3.2：每张图独立设置） */
@@ -37,6 +38,12 @@ object EditSession {
 
     /** 当前照片的人脸检测结果；null = 尚未检测 */
     var beautyFaces: List<com.tianqi.camera.model.FaceData>? = null
+
+    /** 正在查看的历史作品路径（从首页作品列表进入导出页） */
+    var viewingWorkPath: String? = null
+
+    /** 作品列表版本号：增删作品时自增，驱动首页刷新 */
+    val worksVersion = mutableIntStateOf(0)
 
     /** 每张图片的滤镜状态，key = uri.toString() */
     val filterStates = mutableMapOf<String, FilterState>()

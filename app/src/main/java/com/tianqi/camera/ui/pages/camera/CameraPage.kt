@@ -324,7 +324,9 @@ private fun takePhoto(
     executor: java.util.concurrent.Executor,
     onResult: (Uri?) -> Unit
 ) {
-    val rawFile = File(context.cacheDir, "capture_raw_${System.currentTimeMillis()}.jpg")
+    // 成片存 filesDir/captures（草稿恢复后仍可读取，cache 可能被系统清理）
+    val captureDir = File(context.filesDir, "captures").apply { mkdirs() }
+    val rawFile = File(captureDir, "capture_raw_${System.currentTimeMillis()}.jpg")
     val outputOptions = ImageCapture.OutputFileOptions.Builder(rawFile).build()
     val mainHandler = android.os.Handler(context.mainLooper)
     imageCapture.takePicture(
@@ -333,7 +335,7 @@ private fun takePhoto(
         object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                 executor.execute {
-                    val cropped = ImageCropper.centerCropToRatio(rawFile, ratio, context.cacheDir)
+                    val cropped = ImageCropper.centerCropToRatio(rawFile, ratio, captureDir)
                     rawFile.delete()
                     mainHandler.post { onResult(cropped?.let { Uri.fromFile(it) }) }
                 }

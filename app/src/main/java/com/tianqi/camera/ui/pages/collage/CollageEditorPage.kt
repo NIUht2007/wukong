@@ -83,6 +83,7 @@ import com.tianqi.camera.model.SlotEditState
 import com.tianqi.camera.model.StickerLayer
 import com.tianqi.camera.model.TextLayer
 import com.tianqi.camera.service.EditSession
+import com.tianqi.camera.service.DraftStore
 import com.tianqi.camera.service.FilterEngine
 import com.tianqi.camera.model.SweetFilters
 import com.tianqi.camera.service.UndoStack
@@ -124,6 +125,7 @@ fun CollageEditorPage(onBack: () -> Unit, onExport: () -> Unit) {
     }
 
     var state by remember { mutableStateOf(initial) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     var selectedSlot by remember { mutableIntStateOf(-1) }
     var tab by remember { mutableStateOf(EditorTab.LAYOUT) }
     // 滤镜写在 EditSession（按 uri 共享），用 version 触发画布重组
@@ -143,6 +145,7 @@ fun CollageEditorPage(onBack: () -> Unit, onExport: () -> Unit) {
         layers = next
         EditSession.collageLayers = next
         undoVersion++
+        DraftStore.saveCollage(context, state, next)
     }
 
     /** 手势期间的实时预览更新：只改状态，不入栈（手势结束才入栈） */
@@ -174,6 +177,7 @@ fun CollageEditorPage(onBack: () -> Unit, onExport: () -> Unit) {
     fun update(newState: CollageEditState) {
         state = newState
         EditSession.collageState = newState
+        DraftStore.saveCollage(context, newState, layers)
     }
 
     // 换图 / 填空槽：系统单图选择器

@@ -15,10 +15,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,6 +68,7 @@ import com.tianqi.camera.ui.components.PlaceholderPage
 import com.tianqi.camera.ui.components.StickerPanel
 import com.tianqi.camera.ui.components.TextInputDialog
 import com.tianqi.camera.ui.components.TextStylePanel
+import com.tianqi.camera.ui.theme.AppShapes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -79,7 +83,7 @@ private enum class PhotoTab(val label: String) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhotoEditorPage(onBack: () -> Unit) {
+fun PhotoEditorPage(onBack: () -> Unit, onExport: () -> Unit) {
     val photo = EditSession.capturedPhoto
     if (photo == null) {
         PlaceholderPage(title = "照片编辑", hint = "还没有照片哦，先去拍一张吧～", onBack = onBack)
@@ -149,6 +153,14 @@ fun PhotoEditorPage(onBack: () -> Unit) {
                             else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         )
                     }
+                    Button(
+                        onClick = onExport,
+                        shape = AppShapes.Pill,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) { Text("导出", color = Color.White) }
+                    Spacer(Modifier.width(8.dp))
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
