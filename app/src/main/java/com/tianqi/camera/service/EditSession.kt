@@ -32,6 +32,12 @@ object EditSession {
     /** 单图编辑的装饰图层 */
     var photoLayers: List<com.tianqi.camera.model.EditorLayer> = emptyList()
 
+    /** 美颜参数 */
+    var beautyState: com.tianqi.camera.model.BeautyState = com.tianqi.camera.model.BeautyState()
+
+    /** 当前照片的人脸检测结果；null = 尚未检测 */
+    var beautyFaces: List<com.tianqi.camera.model.FaceData>? = null
+
     /** 每张图片的滤镜状态，key = uri.toString() */
     val filterStates = mutableMapOf<String, FilterState>()
 

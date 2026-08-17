@@ -1,5 +1,7 @@
 package com.tianqi.camera.ui.pages.photo
 
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,25 +24,37 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
+import com.tianqi.camera.model.BeautyState
+import com.tianqi.camera.model.FaceData
 import com.tianqi.camera.model.StickerLayer
 import com.tianqi.camera.model.SweetFilters
 import com.tianqi.camera.model.TextLayer
+import com.tianqi.camera.service.BeautyEngine
+import com.tianqi.camera.service.BitmapLoader
 import com.tianqi.camera.service.EditSession
+import com.tianqi.camera.service.FaceDetector
 import com.tianqi.camera.service.FilterEngine
 import com.tianqi.camera.ui.components.DoodlePanel
 import com.tianqi.camera.ui.components.FilterPanel
@@ -51,6 +65,8 @@ import com.tianqi.camera.ui.components.PlaceholderPage
 import com.tianqi.camera.ui.components.StickerPanel
 import com.tianqi.camera.ui.components.TextInputDialog
 import com.tianqi.camera.ui.components.TextStylePanel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private enum class PhotoTab(val label: String) {
     FILTER("滤镜"), BEAUTY("美颜"), STICKER("贴纸"), TEXT("文字"), DOODLE("涂鸦")
@@ -58,7 +74,8 @@ private enum class PhotoTab(val label: String) {
 
 /**
  * 单图编辑页（PRD 3.2/3.4/3.5）：滤镜 | 美颜 | 贴纸 | 文字 | 涂鸦。
- * 装饰图层相对照片显示区域定位；美颜在下一阶段接入。
+ * 美颜：磨皮/美白/红润全图级，瘦脸/大眼基于 ML Kit 人脸关键点液化；
+ * 预览用 512px 小图调参，导出对原图全分辨率重算（BeautyEngine 同一管线）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +85,7 @@ fun PhotoEditorPage(onBack: () -> Unit) {
         PlaceholderPage(title = "照片编辑", hint = "还没有照片哦，先去拍一张吧～", onBack = onBack)
         return
     }
+    val context = LocalContext.current
 
     var tab by remember { mutableStateOf(PhotoTab.FILTER) }
     var filterState by remember { mutableStateOf(EditSession.filterStateOf(photo)) }
@@ -76,6 +94,33 @@ fun PhotoEditorPage(onBack: () -> Unit) {
         LayerEditController(EditSession.photoLayers) { EditSession.photoLayers = it }
     }
     var showTextDialog by remember { mutableStateOf(false) }
+
+    // 美颜：参数 + 人脸检测结果（null=未检测）
+    var beautyState by remember { mutableStateOf(EditSession.beautyState) }
+    var faces by remember { mutableStateOf(EditSession.beautyFaces) }
+    var detecting by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (EditSession.beautyFaces == null && !detecting) {
+            detecting = true
+            faces = FaceDetector.detect(context, photo)
+            EditSession.beautyFaces = faces
+            detecting = false
+        }
+    }
+
+    // 美颜预览：512px 小图实时计算（参数未开时不处理）
+    val beautyBitmap by produceState<Bitmap?>(null, beautyState, faces) {
+        value = if (beautyState == BeautyState()) {
+            null
+        } else {
+            withContext(Dispatchers.Default) {
+                BitmapLoader.decode(context, photo, maxDimension = 512)?.let {
+                    BeautyEngine.apply(it, beautyState, faces ?: emptyList())
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -147,13 +192,26 @@ fun PhotoEditorPage(onBack: () -> Unit) {
                                     .align(Alignment.Center)
                                     .size(w, h)
                             ) {
-                                imageScope.SubcomposeAsyncImageContent(
-                                    contentScale = ContentScale.Fit,
-                                    colorFilter = FilterEngine.composeColorFilter(
-                                        filter, filterState.intensity
-                                    ),
-                                    modifier = Modifier.fillMaxSize()
-                                )
+                                val beauty = beautyBitmap
+                                if (tab == PhotoTab.BEAUTY && beauty != null) {
+                                    Image(
+                                        bitmap = beauty.asImageBitmap(),
+                                        contentDescription = "美颜预览",
+                                        contentScale = ContentScale.Fit,
+                                        colorFilter = FilterEngine.composeColorFilter(
+                                            filter, filterState.intensity
+                                        ),
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    imageScope.SubcomposeAsyncImageContent(
+                                        contentScale = ContentScale.Fit,
+                                        colorFilter = FilterEngine.composeColorFilter(
+                                            filter, filterState.intensity
+                                        ),
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
                                 @Suppress("UNUSED_EXPRESSION") controller.version
                                 LayerOverlay(
                                     layers = controller.layers,
@@ -189,18 +247,16 @@ fun PhotoEditorPage(onBack: () -> Unit) {
                             EditSession.updateFilterState(photo, it)
                         }
                     )
-                    PhotoTab.BEAUTY -> Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(96.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "美颜功能马上就来～",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    PhotoTab.BEAUTY -> BeautyPanel(
+                        state = beautyState,
+                        detecting = detecting,
+                        hasFace = !faces.isNullOrEmpty(),
+                        detectionDone = faces != null,
+                        onChange = {
+                            beautyState = it
+                            EditSession.beautyState = it
+                        }
+                    )
                     PhotoTab.STICKER -> StickerPanel(
                         onPick = { stickerId ->
                             controller.addLayer(
@@ -274,6 +330,75 @@ fun PhotoEditorPage(onBack: () -> Unit) {
                     )
                 )
             }
+        )
+    }
+}
+
+/** 美颜面板：磨皮/美白/红润全图级 + 瘦脸/大眼（需人脸） */
+@Composable
+private fun BeautyPanel(
+    state: BeautyState,
+    detecting: Boolean,
+    hasFace: Boolean,
+    detectionDone: Boolean,
+    onChange: (BeautyState) -> Unit
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+        BeautySlider("磨皮", state.smooth) { onChange(state.copy(smooth = it)) }
+        BeautySlider("美白", state.whiten) { onChange(state.copy(whiten = it)) }
+        BeautySlider("红润", state.rosy) { onChange(state.copy(rosy = it)) }
+        BeautySlider("瘦脸", state.slimFace, enabled = hasFace) {
+            onChange(state.copy(slimFace = it))
+        }
+        BeautySlider("大眼", state.bigEyes, enabled = hasFace) {
+            onChange(state.copy(bigEyes = it))
+        }
+        if (detecting || !detectionDone) {
+            Text(
+                "正在寻找小脸蛋…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else if (!hasFace) {
+            Text(
+                "未检测到小脸蛋哦，瘦脸大眼先休息啦～",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun BeautySlider(
+    label: String,
+    value: Float,
+    enabled: Boolean = true,
+    onChange: (Float) -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (enabled) MaterialTheme.colorScheme.onBackground
+            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = 0f..100f,
+            enabled = enabled,
+            colors = SliderDefaults.colors(
+                thumbColor = Color.White,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                disabledThumbColor = Color.White.copy(alpha = 0.5f),
+                disabledActiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                disabledInactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ),
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp)
         )
     }
 }
