@@ -1,5 +1,8 @@
 package com.tianqi.camera.ui.pages.home
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,7 +49,18 @@ import com.tianqi.camera.ui.theme.TianqiCameraTheme
 
 /** 首页：标题区 + 拍照/拼图入口卡片 + 我的作品（见 04-素材与设计规范.md 第四节） */
 @Composable
-fun HomePage(onCameraClick: () -> Unit, onCollageClick: () -> Unit) {
+fun HomePage(onCameraClick: () -> Unit, onPhotosPicked: (List<android.net.Uri>) -> Unit) {
+    // 系统相册多选（Photo Picker 无需权限，HEIC 由系统解码）
+    val pickPhotos = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(maxItems = 9)
+    ) { uris ->
+        if (uris.isNotEmpty()) onPhotosPicked(uris)
+    }
+    val launchPicker = {
+        pickPhotos.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        )
+    }
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { innerPadding ->
         Column(
             modifier = Modifier
@@ -87,7 +101,7 @@ fun HomePage(onCameraClick: () -> Unit, onCollageClick: () -> Unit) {
                 background = Brush.linearGradient(listOf(MilkApricot, MilkApricot)),
                 contentColor = SweetPink,
                 borderColor = SweetPink,
-                onClick = onCollageClick
+                onClick = launchPicker
             )
 
             Spacer(Modifier.height(32.dp))
@@ -190,6 +204,6 @@ private fun WorksRow() {
 @Composable
 private fun HomePagePreview() {
     TianqiCameraTheme {
-        HomePage(onCameraClick = {}, onCollageClick = {})
+        HomePage(onCameraClick = {}, onPhotosPicked = {})
     }
 }

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.tianqi.camera.service.EditSession
 import com.tianqi.camera.ui.pages.camera.CameraPage
 import com.tianqi.camera.ui.pages.collage.CollageEditorPage
 import com.tianqi.camera.ui.pages.export.ExportPage
@@ -28,10 +29,21 @@ fun TianqiNavHost() {
         composable(Routes.HOME) {
             HomePage(
                 onCameraClick = { navController.navigate(Routes.CAMERA) },
-                onCollageClick = { navController.navigate(Routes.TEMPLATE_PICKER) }
+                onPhotosPicked = { uris ->
+                    EditSession.pickedPhotos = uris
+                    navController.navigate(Routes.TEMPLATE_PICKER)
+                }
             )
         }
-        composable(Routes.CAMERA) { CameraPage(onBack = { navController.popBackStack() }) }
+        composable(Routes.CAMERA) {
+            CameraPage(
+                onBack = { navController.popBackStack() },
+                onCaptured = { uri ->
+                    EditSession.capturedPhoto = uri
+                    navController.navigate(Routes.PHOTO_EDITOR)
+                }
+            )
+        }
         composable(Routes.TEMPLATE_PICKER) { TemplatePickerPage(onBack = { navController.popBackStack() }) }
         composable(Routes.COLLAGE_EDITOR) { CollageEditorPage(onBack = { navController.popBackStack() }) }
         composable(Routes.PHOTO_EDITOR) { PhotoEditorPage(onBack = { navController.popBackStack() }) }
