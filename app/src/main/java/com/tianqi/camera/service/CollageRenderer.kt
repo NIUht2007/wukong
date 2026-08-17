@@ -28,6 +28,7 @@ object CollageRenderer {
         context: Context,
         template: CollageTemplate,
         state: CollageEditState,
+        layers: List<com.tianqi.camera.model.EditorLayer> = emptyList(),
         longEdge: Int = 2560
     ): Bitmap {
         val aspect = state.canvasRatio.aspect
@@ -87,6 +88,9 @@ object CollageRenderer {
             if (filtered != bitmap) filtered.recycle()
             bitmap.recycle()
         }
+
+        // 装饰图层（贴纸/文字/涂鸦）合成在最上层
+        LayerRenderer.drawLayers(canvas, layers, width, height)
         return out
     }
 

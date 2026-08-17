@@ -51,9 +51,13 @@ fun ExportPage(onBack: () -> Unit) {
         return
     }
 
-    val rendered by produceState<Bitmap?>(initialValue = null, template.id, state) {
+    val rendered by produceState<Bitmap?>(initialValue = null, template.id, state, EditSession.collageLayers) {
         value = withContext(Dispatchers.Default) {
-            CollageRenderer.render(context, template, state, longEdge = 2560)
+            CollageRenderer.render(
+                context, template, state,
+                layers = EditSession.collageLayers,
+                longEdge = 2560
+            )
         }
     }
 

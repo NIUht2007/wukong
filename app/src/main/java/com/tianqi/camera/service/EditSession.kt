@@ -26,6 +26,12 @@ object EditSession {
     /** 当前选中的拼图模板 */
     var collageTemplate: com.tianqi.camera.model.CollageTemplate? = null
 
+    /** 拼图编辑的装饰图层（贴纸/文字/涂鸦） */
+    var collageLayers: List<com.tianqi.camera.model.EditorLayer> = emptyList()
+
+    /** 单图编辑的装饰图层 */
+    var photoLayers: List<com.tianqi.camera.model.EditorLayer> = emptyList()
+
     /** 每张图片的滤镜状态，key = uri.toString() */
     val filterStates = mutableMapOf<String, FilterState>()
 

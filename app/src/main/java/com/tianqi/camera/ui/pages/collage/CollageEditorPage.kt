@@ -32,20 +32,25 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.RotateRight
+import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Flip
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -72,12 +77,24 @@ import com.tianqi.camera.model.CanvasRatio
 import com.tianqi.camera.model.CollageBackground
 import com.tianqi.camera.model.CollageEditState
 import com.tianqi.camera.model.CollageTemplate
+import com.tianqi.camera.model.DoodleLayer
+import com.tianqi.camera.model.DoodlePath
 import com.tianqi.camera.model.SlotEditState
+import com.tianqi.camera.model.StickerLayer
+import com.tianqi.camera.model.TextLayer
 import com.tianqi.camera.service.EditSession
 import com.tianqi.camera.service.FilterEngine
 import com.tianqi.camera.model.SweetFilters
+import com.tianqi.camera.service.UndoStack
+import com.tianqi.camera.ui.components.DoodlePanel
+import com.tianqi.camera.ui.components.DoodleSettings
 import com.tianqi.camera.ui.components.FilterPanel
+import com.tianqi.camera.ui.components.LayerOverlay
+import com.tianqi.camera.ui.components.MiniChip
 import com.tianqi.camera.ui.components.PlaceholderPage
+import com.tianqi.camera.ui.components.StickerPanel
+import com.tianqi.camera.ui.components.TextInputDialog
+import com.tianqi.camera.ui.components.TextStylePanel
 import com.tianqi.camera.ui.theme.AppShapes
 import com.tianqi.camera.ui.theme.BerryRed
 import com.tianqi.camera.ui.theme.CardWhite
@@ -88,7 +105,8 @@ import com.tianqi.camera.ui.theme.Peach
 import com.tianqi.camera.ui.theme.SweetPink
 
 private enum class EditorTab(val label: String) {
-    LAYOUT("布局"), FRAME("边框"), BACKGROUND("背景"), FILTER("滤镜")
+    LAYOUT("布局"), FRAME("边框"), BACKGROUND("背景"), FILTER("滤镜"),
+    STICKER("贴纸"), TEXT("文字"), DOODLE("涂鸦")
 }
 
 /**
@@ -110,6 +128,48 @@ fun CollageEditorPage(onBack: () -> Unit, onExport: () -> Unit) {
     var tab by remember { mutableStateOf(EditorTab.LAYOUT) }
     // 滤镜写在 EditSession（按 uri 共享），用 version 触发画布重组
     var filterVersion by remember { mutableIntStateOf(0) }
+
+    // 装饰图层（贴纸/文字/涂鸦）+ 全局撤销/重做
+    var layers by remember { mutableStateOf(EditSession.collageLayers) }
+    val layerStack = remember { UndoStack(EditSession.collageLayers) }
+    var undoVersion by remember { mutableIntStateOf(0) }
+    var selectedLayerId by remember { mutableStateOf<String?>(null) }
+    var doodleSettings by remember { mutableStateOf(DoodleSettings()) }
+    var showTextDialog by remember { mutableStateOf(false) }
+    var currentDoodlePoints by remember { mutableStateOf<List<androidx.compose.ui.geometry.Offset>>(emptyList()) }
+
+    fun commitLayers(next: List<com.tianqi.camera.model.EditorLayer>) {
+        if (next != layerStack.current) layerStack.push(next)
+        layers = next
+        EditSession.collageLayers = next
+        undoVersion++
+    }
+
+    /** 手势期间的实时预览更新：只改状态，不入栈（手势结束才入栈） */
+    fun previewLayers(next: List<com.tianqi.camera.model.EditorLayer>) {
+        layers = next
+    }
+
+    fun replaceLayer(updated: com.tianqi.camera.model.EditorLayer): List<com.tianqi.camera.model.EditorLayer> =
+        layers.map { if (it.id == updated.id) updated else it }
+
+    fun addDoodlePoint(point: androidx.compose.ui.geometry.Offset, isStart: Boolean) {
+        val doodle = layers.filterIsInstance<DoodleLayer>().firstOrNull()
+            ?: DoodleLayer(id = "doodle")
+        val others = layers.filterNot { it is DoodleLayer }
+        val paths = if (isStart) {
+            doodle.paths + DoodlePath(
+                points = listOf(point),
+                colorArgb = doodleSettings.colorArgb,
+                widthFraction = doodleSettings.widthFraction,
+                eraser = doodleSettings.eraser
+            )
+        } else {
+            val last = doodle.paths.lastOrNull() ?: return
+            doodle.paths.dropLast(1) + last.copy(points = last.points + point)
+        }
+        previewLayers(others + doodle.copy(paths = paths))
+    }
 
     fun update(newState: CollageEditState) {
         state = newState
@@ -138,6 +198,33 @@ fun CollageEditorPage(onBack: () -> Unit, onExport: () -> Unit) {
                     }
                 },
                 actions = {
+                    @Suppress("UNUSED_EXPRESSION") undoVersion
+                    IconButton(
+                        onClick = {
+                            commitLayers(layerStack.undo())
+                        },
+                        enabled = layerStack.canUndo
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.Undo,
+                            contentDescription = "撤销",
+                            tint = if (layerStack.canUndo) MaterialTheme.colorScheme.onBackground
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            commitLayers(layerStack.redo())
+                        },
+                        enabled = layerStack.canRedo
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.Redo,
+                            contentDescription = "重做",
+                            tint = if (layerStack.canRedo) MaterialTheme.colorScheme.onBackground
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
+                    }
                     Button(
                         onClick = onExport,
                         shape = AppShapes.Pill,
@@ -172,8 +259,12 @@ fun CollageEditorPage(onBack: () -> Unit, onExport: () -> Unit) {
                     state = state,
                     selectedSlot = selectedSlot,
                     filterVersion = filterVersion,
+                    layers = layers,
+                    selectedLayerId = selectedLayerId,
+                    doodleMode = tab == EditorTab.DOODLE,
                     onSlotTap = { index ->
                         selectedSlot = index
+                        selectedLayerId = null
                         if (state.slots[index].uri == null) launchPicker()
                     },
                     onSlotTransform = { index, panX, panY, zoom ->
@@ -188,7 +279,16 @@ fun CollageEditorPage(onBack: () -> Unit, onExport: () -> Unit) {
                                 )
                             )
                         )
-                    }
+                    },
+                    onLayerSelect = { selectedLayerId = it },
+                    onLayerPreview = { previewLayers(replaceLayer(it)) },
+                    onLayerCommit = { commitLayers(layers) },
+                    onLayerDelete = { id ->
+                        commitLayers(layers.filterNot { it.id == id })
+                        selectedLayerId = null
+                    },
+                    onDoodlePoint = { point, isStart -> addDoodlePoint(point, isStart) },
+                    onDoodleEnd = { commitLayers(layers) }
                 )
             }
 
@@ -240,6 +340,44 @@ fun CollageEditorPage(onBack: () -> Unit, onExport: () -> Unit) {
                             )
                         }
                     }
+                    EditorTab.STICKER -> StickerPanel(
+                        onPick = { stickerId ->
+                            val layer = StickerLayer(
+                                id = "sticker_${System.currentTimeMillis()}",
+                                stickerId = stickerId
+                            )
+                            commitLayers(layers + layer)
+                            selectedLayerId = layer.id
+                        }
+                    )
+                    EditorTab.TEXT -> {
+                        val selectedText =
+                            layers.filterIsInstance<TextLayer>().firstOrNull { it.id == selectedLayerId }
+                        Column {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                MiniChip(label = "＋ 添加文字", selected = true) {
+                                    showTextDialog = true
+                                }
+                            }
+                            if (selectedText != null) {
+                                TextStylePanel(
+                                    layer = selectedText,
+                                    onChange = { commitLayers(replaceLayer(it)) }
+                                )
+                            } else {
+                                PanelHint("选中文字可以改颜色、字体、描边哦～")
+                            }
+                        }
+                    }
+                    EditorTab.DOODLE -> DoodlePanel(
+                        settings = doodleSettings,
+                        onChange = { doodleSettings = it }
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(
@@ -258,6 +396,22 @@ fun CollageEditorPage(onBack: () -> Unit, onExport: () -> Unit) {
             }
         }
     }
+
+    if (showTextDialog) {
+        TextInputDialog(
+            onDismiss = { showTextDialog = false },
+            onConfirm = { text ->
+                showTextDialog = false
+                val layer = TextLayer(
+                    id = "text_${System.currentTimeMillis()}",
+                    text = text,
+                    colorArgb = 0xFF4A3B38
+                )
+                commitLayers(layers + layer)
+                selectedLayerId = layer.id
+            }
+        )
+    }
 }
 
 /** 拼图画布：背景 + 槽位布局，几何换算与 CollageRenderer 一致 */
@@ -267,8 +421,17 @@ private fun CollageCanvas(
     state: CollageEditState,
     selectedSlot: Int,
     filterVersion: Int,
+    layers: List<com.tianqi.camera.model.EditorLayer>,
+    selectedLayerId: String?,
+    doodleMode: Boolean,
     onSlotTap: (Int) -> Unit,
-    onSlotTransform: (index: Int, panX: Float, panY: Float, zoom: Float) -> Unit
+    onSlotTransform: (index: Int, panX: Float, panY: Float, zoom: Float) -> Unit,
+    onLayerSelect: (String?) -> Unit,
+    onLayerPreview: (com.tianqi.camera.model.EditorLayer) -> Unit,
+    onLayerCommit: () -> Unit,
+    onLayerDelete: (String) -> Unit,
+    onDoodlePoint: (androidx.compose.ui.geometry.Offset, Boolean) -> Unit,
+    onDoodleEnd: () -> Unit
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     BoxWithConstraints {
@@ -321,6 +484,19 @@ private fun CollageCanvas(
                     )
                 }
             }
+
+            // 装饰图层覆盖在槽位之上
+            LayerOverlay(
+                layers = layers,
+                selectedId = selectedLayerId,
+                doodleMode = doodleMode,
+                onSelect = onLayerSelect,
+                onLayerPreview = onLayerPreview,
+                onGestureCommit = onLayerCommit,
+                onDelete = onLayerDelete,
+                onDoodlePoint = onDoodlePoint,
+                onDoodleEnd = onDoodleEnd
+            )
         }
     }
 }
