@@ -1,8 +1,8 @@
 package com.tianqi.camera.service
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.net.Uri
+import android.util.Log
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.FaceContour
 import com.google.mlkit.vision.face.FaceDetection
@@ -15,6 +15,12 @@ import kotlinx.coroutines.withContext
 /** ML Kit 人脸检测：返回归一化关键点；检测不到返回空列表 */
 object FaceDetector {
 
+    private const val TAG = "FaceDetector"
+
+    /** 最近一次检测的异常信息（调试用，null = 无异常） */
+    var lastError: String? = null
+        private set
+
     private val detector by lazy {
         FaceDetection.getClient(
             FaceDetectorOptions.Builder()
@@ -26,10 +32,17 @@ object FaceDetector {
 
     suspend fun detect(context: Context, uri: Uri): List<FaceData> =
         withContext(Dispatchers.Default) {
-            val bitmap = BitmapLoader.decode(context, uri, maxDimension = 1024) ?: return@withContext emptyList()
+            lastError = null
+            val bitmap = BitmapLoader.decode(context, uri, maxDimension = 1024)
+            if (bitmap == null) {
+                lastError = "图片解码失败"
+                Log.e(TAG, "decode failed for $uri")
+                return@withContext emptyList()
+            }
             try {
                 val image = InputImage.fromBitmap(bitmap, 0)
                 val faces = detector.process(image).await()
+                Log.d(TAG, "detected ${faces.size} face(s)")
                 val w = bitmap.width.toFloat()
                 val h = bitmap.height.toFloat()
                 faces.map { face ->
@@ -58,6 +71,8 @@ object FaceDetector {
                     )
                 }
             } catch (e: Exception) {
+                lastError = e.message ?: e.javaClass.simpleName
+                Log.e(TAG, "face detection failed", e)
                 emptyList()
             } finally {
                 bitmap.recycle()

@@ -5,22 +5,35 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
+import android.util.Log
 import androidx.exifinterface.media.ExifInterface
+import java.io.File
+import java.io.InputStream
 
 /** 从 Uri（content:// 或 file://）解码 Bitmap，带采样压缩与 EXIF 旋转归正 */
 object BitmapLoader {
+
+    private const val TAG = "BitmapLoader"
+
+    /** file:// 直接读文件；content:// 走 ContentResolver（带异常保护） */
+    private fun openStream(context: Context, uri: Uri): InputStream? =
+        if (uri.scheme == "file") {
+            uri.path?.let { path -> runCatching { File(path).inputStream() }.getOrNull() }
+        } else {
+            runCatching { context.contentResolver.openInputStream(uri) }.getOrNull()
+        }
 
     /**
      * @param maxDimension 最长边上限，超出按比例采样缩小；<= 0 表示不压缩
      */
     fun decode(context: Context, uri: Uri, maxDimension: Int = 2048): Bitmap? {
-        val resolver = context.contentResolver
-
         // 先读尺寸
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-            ?: return null
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        openStream(context, uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            Log.e(TAG, "decode bounds failed for $uri (scheme=${uri.scheme})")
+            return null
+        }
 
         // 计算采样率
         var sample = 1
@@ -30,11 +43,14 @@ object BitmapLoader {
         }
 
         val options = BitmapFactory.Options().apply { inSampleSize = sample }
-        val raw = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
-            ?: return null
+        val raw = openStream(context, uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+        if (raw == null) {
+            Log.e(TAG, "decode pixels failed for $uri")
+            return null
+        }
 
         // EXIF 旋转/镜像归正
-        val exif = resolver.openInputStream(uri)?.use { ExifInterface(it) } ?: return raw
+        val exif = openStream(context, uri)?.use { ExifInterface(it) } ?: return raw
         val matrix = Matrix()
         when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
             ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)

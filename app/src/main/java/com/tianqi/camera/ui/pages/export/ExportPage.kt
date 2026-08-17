@@ -88,31 +88,41 @@ fun ExportPage(onBack: () -> Unit) {
     var statusText by remember { mutableStateOf<String?>(null) }
     var working by remember { mutableStateOf(false) }
 
-    // 渲染导出图（三种模式之一）
-    val rendered by produceState<Bitmap?>(
-        initialValue = null,
+    // 渲染导出图（三种模式之一）；first=结果图，second=错误信息
+    val rendered by produceState<Pair<Bitmap?, String?>>(
+        initialValue = null to null,
         workPath, template?.id, collageState, photo
     ) {
         value = withContext(Dispatchers.Default) {
-            when {
-                workPath != null -> BitmapFactory.decodeFile(workPath)
-                template != null && collageState != null -> CollageRenderer.render(
-                    context, template, collageState,
-                    layers = EditSession.collageLayers,
-                    longEdge = 2560
-                )
-                photo != null -> PhotoRenderer.render(
-                    context, photo,
-                    filterState = EditSession.filterStateOf(photo),
-                    beautyState = EditSession.beautyState,
-                    faces = EditSession.beautyFaces ?: emptyList(),
-                    layers = EditSession.photoLayers,
-                    longEdge = 2560
-                )
-                else -> null
-            }
+            runCatching {
+                when {
+                    workPath != null -> BitmapFactory.decodeFile(workPath)
+                    template != null && collageState != null -> CollageRenderer.render(
+                        context, template, collageState,
+                        layers = EditSession.collageLayers,
+                        longEdge = 2560
+                    )
+                    photo != null -> PhotoRenderer.render(
+                        context, photo,
+                        filterState = EditSession.filterStateOf(photo),
+                        beautyState = EditSession.beautyState,
+                        faces = EditSession.beautyFaces ?: emptyList(),
+                        layers = EditSession.photoLayers,
+                        longEdge = 2560
+                    )
+                    else -> null
+                }
+            }.fold(
+                onSuccess = { it to null },
+                onFailure = {
+                    android.util.Log.e("ExportPage", "render failed", it)
+                    null to "生成失败了，返回再试一次吧"
+                }
+            )
         }
     }
+    val renderedBitmap = rendered.first
+    val renderError = rendered.second
 
     // API 28 及以下保存相册前先申请存储权限
     var pendingSave by remember { mutableStateOf(false) }
@@ -146,9 +156,9 @@ fun ExportPage(onBack: () -> Unit) {
 
     // 权限补发成功后自动继续保存
     LaunchedEffect(pendingSave) {
-        if (pendingSave && rendered != null) {
+        if (pendingSave && renderedBitmap != null) {
             pendingSave = false
-            doSave(rendered!!)
+            doSave(renderedBitmap!!)
         }
     }
 
@@ -217,9 +227,18 @@ fun ExportPage(onBack: () -> Unit) {
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                val bitmap = rendered
-                if (bitmap == null) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                val bitmap = renderedBitmap
+                when {
+                    renderError != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            renderError!!,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        MiniChip(label = "返回重试", selected = false, onClick = onBack)
+                    }
+                    bitmap == null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.height(12.dp))
                         Text(
@@ -228,8 +247,7 @@ fun ExportPage(onBack: () -> Unit) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                } else {
-                    Image(
+                    else -> Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = "导出预览（2560px）",
                         contentScale = ContentScale.Fit,
@@ -283,8 +301,8 @@ fun ExportPage(onBack: () -> Unit) {
                         ) { Text("删除") }
                         Spacer(Modifier.width(12.dp))
                         Button(
-                            onClick = { rendered?.let(::doShare) },
-                            enabled = rendered != null,
+                            onClick = { renderedBitmap?.let(::doShare) },
+                            enabled = renderedBitmap != null,
                             shape = AppShapes.Pill,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary
@@ -292,14 +310,14 @@ fun ExportPage(onBack: () -> Unit) {
                         ) { Text("分享", color = Color.White) }
                     } else {
                         OutlinedButton(
-                            onClick = { rendered?.let(::doShare) },
-                            enabled = rendered != null,
+                            onClick = { renderedBitmap?.let(::doShare) },
+                            enabled = renderedBitmap != null,
                             shape = AppShapes.Pill
                         ) { Text("分享") }
                         Spacer(Modifier.width(12.dp))
                         Button(
-                            onClick = { rendered?.let(::doSave) },
-                            enabled = rendered != null && !working,
+                            onClick = { renderedBitmap?.let(::doSave) },
+                            enabled = renderedBitmap != null && !working,
                             shape = AppShapes.Pill,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary

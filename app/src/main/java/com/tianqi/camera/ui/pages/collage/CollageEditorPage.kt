@@ -67,6 +67,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
@@ -719,7 +720,7 @@ private fun BackgroundPanel(state: CollageEditState, onChange: (CollageEditState
             contentPadding = PaddingValues(horizontal = 20.dp)
         ) {
             items(solids) { color ->
-                val argb = color.value.toLong() and 0xFFFFFFFF
+                val argb = color.toArgb().toLong() and 0xFFFFFFFF
                 BackgroundSwatch(
                     brush = Brush.linearGradient(listOf(color, color)),
                     selected = (state.background as? CollageBackground.Solid)?.argb == argb,
@@ -727,8 +728,8 @@ private fun BackgroundPanel(state: CollageEditState, onChange: (CollageEditState
                 )
             }
             items(gradients) { (from, to) ->
-                val fromArgb = from.value.toLong() and 0xFFFFFFFF
-                val toArgb = to.value.toLong() and 0xFFFFFFFF
+                val fromArgb = from.toArgb().toLong() and 0xFFFFFFFF
+                val toArgb = to.toArgb().toLong() and 0xFFFFFFFF
                 val selected = (state.background as? CollageBackground.Gradient)?.let {
                     it.fromArgb == fromArgb && it.toArgb == toArgb
                 } == true

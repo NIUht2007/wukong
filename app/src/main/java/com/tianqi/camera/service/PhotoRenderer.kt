@@ -21,6 +21,19 @@ object PhotoRenderer {
         longEdge: Int = 2560
     ): Bitmap? {
         var bitmap = BitmapLoader.decode(context, uri, maxDimension = longEdge) ?: return null
+        // inSampleSize 只能按 2 的幂采样，再精确缩放到最长边 longEdge，控制美颜计算量
+        val longest = maxOf(bitmap.width, bitmap.height)
+        if (longest > longEdge) {
+            val scale = longEdge.toFloat() / longest
+            val scaled = Bitmap.createScaledBitmap(
+                bitmap,
+                (bitmap.width * scale).toInt(),
+                (bitmap.height * scale).toInt(),
+                true
+            )
+            bitmap.recycle()
+            bitmap = scaled
+        }
 
         if (beautyState != BeautyState()) {
             val processed = BeautyEngine.apply(bitmap, beautyState, faces)

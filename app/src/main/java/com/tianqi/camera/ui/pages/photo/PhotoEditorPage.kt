@@ -35,6 +35,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -103,8 +104,9 @@ fun PhotoEditorPage(onBack: () -> Unit, onExport: () -> Unit) {
     var beautyState by remember { mutableStateOf(EditSession.beautyState) }
     var faces by remember { mutableStateOf(EditSession.beautyFaces) }
     var detecting by remember { mutableStateOf(false) }
+    var detectNonce by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(detectNonce) {
         if (EditSession.beautyFaces == null && !detecting) {
             detecting = true
             faces = FaceDetector.detect(context, photo)
@@ -264,6 +266,11 @@ fun PhotoEditorPage(onBack: () -> Unit, onExport: () -> Unit) {
                         detecting = detecting,
                         hasFace = !faces.isNullOrEmpty(),
                         detectionDone = faces != null,
+                        onRetry = {
+                            faces = null
+                            EditSession.beautyFaces = null
+                            detectNonce++
+                        },
                         onChange = {
                             beautyState = it
                             EditSession.beautyState = it
@@ -353,6 +360,7 @@ private fun BeautyPanel(
     detecting: Boolean,
     hasFace: Boolean,
     detectionDone: Boolean,
+    onRetry: () -> Unit,
     onChange: (BeautyState) -> Unit
 ) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
@@ -365,18 +373,27 @@ private fun BeautyPanel(
         BeautySlider("大眼", state.bigEyes, enabled = hasFace) {
             onChange(state.copy(bigEyes = it))
         }
-        if (detecting || !detectionDone) {
-            Text(
+        when {
+            detecting || !detectionDone -> Text(
                 "正在寻找小脸蛋…",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        } else if (!hasFace) {
-            Text(
-                "未检测到小脸蛋哦，瘦脸大眼先休息啦～",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            !hasFace -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = if (FaceDetector.lastError != null)
+                        "人脸检测出了点问题（${FaceDetector.lastError}）"
+                    else
+                        "未检测到小脸蛋哦，瘦脸大眼先休息啦～",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                MiniChip(label = "再试一次", selected = false, onClick = onRetry)
+            }
         }
     }
 }

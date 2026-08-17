@@ -71,22 +71,29 @@ object CollageRenderer {
             // 图片区域 = 外框内缩边框
             val imageRect = RectF(frame).apply { inset(borderPx, borderPx) }
 
-            val bitmap = BitmapLoader.decode(context, uri, maxDimension = longEdge) ?: return@forEachIndexed
-            val filtered = FilterEngine.applyToBitmap(
-                bitmap,
-                com.tianqi.camera.model.SweetFilters.byId(EditSession.filterStateOf(uri).filterId),
-                EditSession.filterStateOf(uri).intensity
-            )
+            // 按槽位实际像素尺寸解码，避免 9 图时全尺寸解码导致内存暴涨
+            val neededSize = (max(imageRect.width(), imageRect.height()) * 1.5f).toInt()
+            runCatching {
+                val bitmap = BitmapLoader.decode(context, uri, maxDimension = neededSize)
+                    ?: return@runCatching
+                val filtered = FilterEngine.applyToBitmap(
+                    bitmap,
+                    com.tianqi.camera.model.SweetFilters.byId(EditSession.filterStateOf(uri).filterId),
+                    EditSession.filterStateOf(uri).intensity
+                )
 
-            val path = Path().apply {
-                addRoundRect(imageRect, cornerPx, cornerPx, Path.Direction.CW)
+                val path = Path().apply {
+                    addRoundRect(imageRect, cornerPx, cornerPx, Path.Direction.CW)
+                }
+                canvas.save()
+                canvas.clipPath(path)
+                canvas.drawBitmap(filtered, buildImageMatrix(filtered, slotState, imageRect), null)
+                canvas.restore()
+                if (filtered != bitmap) filtered.recycle()
+                bitmap.recycle()
+            }.onFailure {
+                android.util.Log.e("CollageRenderer", "slot $index render failed", it)
             }
-            canvas.save()
-            canvas.clipPath(path)
-            canvas.drawBitmap(filtered, buildImageMatrix(filtered, slotState, imageRect), null)
-            canvas.restore()
-            if (filtered != bitmap) filtered.recycle()
-            bitmap.recycle()
         }
 
         // 装饰图层（贴纸/文字/涂鸦）合成在最上层

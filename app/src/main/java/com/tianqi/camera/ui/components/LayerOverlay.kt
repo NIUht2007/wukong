@@ -33,7 +33,9 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.TextStyle
@@ -115,6 +118,16 @@ fun LayerOverlay(
         val canvasW = constraints.maxWidth.toFloat()
         val canvasH = constraints.maxHeight.toFloat()
         val base = minOf(canvasW, canvasH)
+
+        // 点击空白处取消选中：只在有图层被选中时启用，避免拦截槽位点击；
+        // 置于最底层，图层在上优先接收手势
+        if (!doodleMode && selectedId != null) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .pointerInput(Unit) { detectTapGestures { onSelect(null) } }
+            )
+        }
 
         layers.forEach { layer ->
             when (layer) {
@@ -200,13 +213,6 @@ fun LayerOverlay(
                         }
                     }
             )
-        } else {
-            // 点击空白处取消选中
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .pointerInput(Unit) { detectTapGestures { onSelect(null) } }
-            )
         }
     }
 }
@@ -228,6 +234,8 @@ private fun DraggableLayer(
 ) {
     val cx = layer.centerX * canvasW
     val cy = layer.centerY * canvasH
+    // 手势协程在组合时捕获 layer，拖动过程中必须读最新值，否则位移不累积
+    val latestLayer by rememberUpdatedState(layer)
 
     Box(
         modifier = Modifier
@@ -242,7 +250,7 @@ private fun DraggableLayer(
                         }
                         .pointerInput(layer.id) {
                             detectTransformGestures { _, pan, zoom, rotation ->
-                                val updated = layer.movedBy(
+                                val updated = latestLayer.movedBy(
                                     dx = pan.x / canvasW,
                                     dy = pan.y / canvasH,
                                     zoom = zoom,
@@ -297,7 +305,7 @@ private fun DraggableLayer(
     }
 }
 
-/** 更新图层变换（位移/缩放/旋转），返回新实例 */
+/** 更新图层变换（位移/缩放/旋转），返回新实例；中心允许半出画布 */
 private fun EditorLayer.movedBy(
     dx: Float,
     dy: Float,
@@ -305,15 +313,15 @@ private fun EditorLayer.movedBy(
     rotationDelta: Float
 ): EditorLayer = when (this) {
     is StickerLayer -> copy(
-        centerX = (centerX + dx).coerceIn(0f, 1f),
-        centerY = (centerY + dy).coerceIn(0f, 1f),
-        scale = (scale * zoom).coerceIn(0.2f, 5f),
+        centerX = (centerX + dx).coerceIn(-0.5f, 1.5f),
+        centerY = (centerY + dy).coerceIn(-0.5f, 1.5f),
+        scale = (scale * zoom).coerceIn(0.2f, 8f),
         rotation = rotation + rotationDelta
     )
     is TextLayer -> copy(
-        centerX = (centerX + dx).coerceIn(0f, 1f),
-        centerY = (centerY + dy).coerceIn(0f, 1f),
-        scale = (scale * zoom).coerceIn(0.2f, 5f),
+        centerX = (centerX + dx).coerceIn(-0.5f, 1.5f),
+        centerY = (centerY + dy).coerceIn(-0.5f, 1.5f),
+        scale = (scale * zoom).coerceIn(0.2f, 8f),
         rotation = rotation + rotationDelta
     )
     is DoodleLayer -> this
@@ -399,7 +407,7 @@ fun DoodlePanel(settings: DoodleSettings, onChange: (DoodleSettings) -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             LayerPalette.forEach { color ->
-                val argb = color.value.toLong() and 0xFFFFFFFF
+                val argb = color.toArgb().toLong() and 0xFFFFFFFF
                 Box(
                     modifier = Modifier
                         .size(32.dp)
@@ -454,7 +462,7 @@ fun TextStylePanel(layer: TextLayer, onChange: (TextLayer) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             LayerPalette.forEach { color ->
-                val argb = color.value.toLong() and 0xFFFFFFFF
+                val argb = color.toArgb().toLong() and 0xFFFFFFFF
                 Box(
                     modifier = Modifier
                         .size(28.dp)
